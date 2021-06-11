@@ -1,7 +1,20 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+const fs = require("fs")
 
 import TargetTreeProvider from './targetTreeProvider';
+
+import { readFiles } from './readFiles';
+import { parseFile } from './file-parser';
+import { Module, parseStruct } from 'ts-file-parser';
+
+interface componentData {
+  name: string,
+  cssContent: string,
+  scriptContent: string,
+  htmlContent: string
+}
+
 /**
  * Manages webview panels
  */
@@ -17,7 +30,7 @@ class WebPanel {
   private readonly extensionPath: string;
   private readonly builtAppFolder: string;
   private disposables: vscode.Disposable[] = [];
-
+  
   public static createOrShow(extensionPath: string) {
     const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
@@ -60,11 +73,94 @@ class WebPanel {
           case 'alert':
             vscode.window.showErrorMessage(message.text);
             return;
+          case 'publishCode':
+            this.generateFiles(message.data);
+            return;
+          case 'getServiceFiles':
+            this.getListOfServiceFiles();
+            return;
+          case 'getServiceData':
+            console.log('getservicedata vscode')
+            this.getServiceData(message.data);
+            return;
         }
       },
       null,
       this.disposables
     );
+  }
+
+  private generateFiles(data: componentData) {
+    const options: vscode.OpenDialogOptions = {
+      canSelectMany: false,
+      canSelectFolders: true,
+      canSelectFiles: false
+    };
+    vscode.window.showOpenDialog(options).then(fileUri => {
+      if (fileUri && fileUri[0]) {
+        const dirPath = `${fileUri[0].path}/${data.name}`
+        vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+        
+        const htmlFilePath = `${dirPath}/${data.name}.html`;
+        vscode.workspace.fs.writeFile(vscode.Uri.file(htmlFilePath), Buffer.from(data.htmlContent));
+        
+        const scriptFilePath = `${dirPath}/${data.name}.ts`;
+        vscode.workspace.fs.writeFile(vscode.Uri.file(scriptFilePath), Buffer.from(data.scriptContent));
+        
+        const cssFilePath = `${dirPath}/${data.name}.scss`;
+        vscode.workspace.fs.writeFile(vscode.Uri.file(cssFilePath), Buffer.from(data.cssContent));
+
+        vscode.window.showInformationMessage('component generated in ' + dirPath);
+      }
+    });
+  }
+
+  getListOfServiceFiles() {
+    var serviceFiles: any[] = [];
+    if(vscode.workspace.rootPath) {
+
+      readFiles(vscode.workspace.rootPath.concat('/src/app'), {
+        match: /.ts$/,
+        exclude: /^\./,
+        excludeDir: ['common']
+      }, function(err: any, content: string, file:string, next: any) {
+        if (err) throw err;
+        if(content.includes('@Injectable')) {
+          serviceFiles.push(file)
+        }
+        // console.log('content:', content);
+        // console.log('file:', file);
+        next();
+      },
+      (err: any, files: any) => {
+        let data = serviceFiles;
+        if (err) {
+          data = null;
+        }
+        this.panel.webview.postMessage({ 
+          command: 'serviceFilesFetched',
+          data,
+          err
+        });
+      });
+    }
+  }
+
+  getServiceData(filePath: string) {
+    let data;
+    let err;
+    try{
+      const decls = fs.readFileSync(filePath).toString();
+      const jsonStructure: Module = parseStruct(decls, {}, "");
+      data = jsonStructure;
+    } catch (e) {
+      err = e;
+    }
+    this.panel.webview.postMessage({ 
+      command: 'serviceDataFetched',
+      data,
+      err
+    });
   }
 
   public dispose() {
@@ -85,7 +181,74 @@ class WebPanel {
    * Returns html of the start page (index.html)
    */
   private _getHtmlForWebview() {
-    return `<html><head></head><body> <iframe src="http://uibuilder.clixlogix.org" style="height: 600px; width: 100%;"></iframe> </body></html>`
+    return `
+    <html>
+      <head></head>
+      <body>
+        <button onclick="getServiceFiles()">btn</button>
+        <iframe src="http://localhost:4900" style="height: 600px; width: 100%;" id="ui-builder-iframe"></iframe>
+      <script>
+      const vscode = acquireVsCodeApi();
+      function getServiceFiles() {
+        vscode.postMessage({
+          command: 'getServiceFiles'
+        })
+      }
+      
+      window.addEventListener('message', event => {
+        const message = event.data; // The JSON data our extension sent
+        switch (message.command) {
+          case 'getServiceFiles':
+            vscode.postMessage({
+              command: 'getServiceFiles',
+              data: message.data
+            })
+            break;
+          case 'serviceFilesFetched':
+            var frame = document.getElementById("ui-builder-iframe");/*the iframe DOM object*/;
+            frame.contentWindow.postMessage({
+              command: 'serviceFilesFetchedUI',
+              data: message.data,
+              err: message.err
+            }, "*");
+            break;
+          case 'getServiceData':
+            console.log('getservice data iframe')
+            vscode.postMessage({
+              command: 'getServiceData',
+              data: message.data
+            })
+            break;
+          case 'serviceDataFetched':
+            var frame = document.getElementById("ui-builder-iframe");/*the iframe DOM object*/;
+            frame.contentWindow.postMessage({
+              command: 'serviceDataFetchedUI',
+              data: message.data,
+              err: message.err
+            }, "*");
+            break;
+          case 'publishCode':
+            vscode.postMessage({
+              command: 'publishCode',
+              data: message.data,
+              err: message.err
+            })
+            break;
+        }
+      });
+
+      // (function() {
+      //   window.onmessage = function(e){
+      //     vscode.postMessage({
+      //       command: 'publishCode',
+      //       data: e.data
+      //     })
+      //   };
+      // }())
+      </script>
+      </body>
+
+    </html>`
   }
 }
 

@@ -1,12 +1,16 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "umd",
     "target": "es6",
     "outDir": "dist",
     "lib": ["es6", "dom"],
     "sourceMap": true,
     "rootDir": ".",
-    "strict": true
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "moduleResolution": "node"
   },
   "include": ["ext-src"],
   "exclude": ["node_modules/*", ".vscode-test", ".vscode/*"]
