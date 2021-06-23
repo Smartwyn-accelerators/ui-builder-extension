@@ -184,8 +184,7 @@ class WebPanel {
 
       readFiles(vscode.workspace.rootPath.concat('/src/app'), {
         match: /.ts$/,
-        exclude: /^\./,
-        excludeDir: []
+        exclude: /^\./
       }, function(err: any, content: string, file:string, next: any) {
         if (err) throw err;
         if(content.includes('@Injectable')) {
