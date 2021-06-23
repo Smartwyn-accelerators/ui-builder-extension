@@ -7,12 +7,15 @@ import TargetTreeProvider from './targetTreeProvider';
 import { readFiles } from './readFiles';
 import { parseFile } from './file-parser';
 import { Module, parseStruct } from 'ts-file-parser';
+import { resolve } from 'ts-file-parser/src/fsUtils';
 
 interface componentData {
   name: string,
   cssContent: string,
   scriptContent: string,
-  htmlContent: string
+  htmlContent: string,
+  serviceVariables: any;
+
 }
 
 /**
@@ -30,7 +33,7 @@ class WebPanel {
   private readonly extensionPath: string;
   private readonly builtAppFolder: string;
   private disposables: vscode.Disposable[] = [];
-  
+  private serviceFileList: any[] = [];
   public static createOrShow(extensionPath: string) {
     const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
@@ -89,6 +92,65 @@ class WebPanel {
       this.disposables
     );
   }
+  private generateServiceMethod(element){
+    let str1='';
+    if(element.apiMethod==='get'){
+    str1=str1+`${element.methodName}(requestParams,requestHeaders){
+      return this.httpclient.get('${element.apiURL}', { params: requestParams , headers:requestHeaders }).pipe(catchError());
+    }`;
+    }
+    else if(element.apiMethod==='post'){
+      str1=str1+`${element.methodName}(requestParams,requestHeaders,body){
+        return this.httpclient.post('${element.apiURL}', body , { params: requestParams , headers:requestHeaders }).pipe(catchError());
+      }`;
+    }
+    return str1;
+  }
+  private readFile(serviceFilePath){
+    return new Promise((resolve, reject) => {
+    fs.readFile(serviceFilePath, 'utf8', function (err,data1) {
+      if (err) {
+        return console.log(err);
+      }
+      console.log(data1);
+      resolve(data1);
+       //generate string
+    
+    });
+  });
+  }
+  private async addServiceMethod(variables:any[]){
+    //get service name from the script //get variable names from variables array
+    let filedata;
+    for (let index = 0; index < variables.length; index++) {
+      const element = variables[index];
+      if(element.serviceName){
+      const serviceFilePath = element.serviceName;
+      await this.readFile(serviceFilePath).then(async res=>{
+        filedata=res;
+        if(filedata!==''){
+          let str= this.generateServiceMethod(element);
+          let result;
+          if(!filedata.includes(str)){
+           result =  filedata.replace('\r\n}\r\n','\n'+str+'\r\n}\r\n');
+           if(result.indexOf(`import { catchError} from 'rxjs/operators';`)<0){
+           result = result.replace(`import { Injectable } from '@angular/core';`,`import { Injectable } from '@angular/core';
+           import { catchError} from 'rxjs/operators';`);
+           }
+           await fs.writeFile(serviceFilePath, result , 'utf8', function (err) {
+            if (err) return console.log(err);
+          });
+          }
+            
+          }
+      })
+      
+      
+      }
+
+    }
+
+  }
 
   private generateFiles(data: componentData) {
     const options: vscode.OpenDialogOptions = {
@@ -109,6 +171,7 @@ class WebPanel {
         
         const cssFilePath = `${dirPath}/${data.name}.scss`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(cssFilePath), Buffer.from(data.cssContent));
+        this.addServiceMethod(data.serviceVariables);
 
         vscode.window.showInformationMessage('component generated in ' + dirPath);
       }
@@ -122,12 +185,14 @@ class WebPanel {
       readFiles(vscode.workspace.rootPath.concat('/src/app'), {
         match: /.ts$/,
         exclude: /^\./,
-        excludeDir: ['common']
+        excludeDir: []
       }, function(err: any, content: string, file:string, next: any) {
         if (err) throw err;
         if(content.includes('@Injectable')) {
-          serviceFiles.push(file)
+          serviceFiles.push(file);
         }
+        // this.serviceFileList=serviceFiles;
+
         // console.log('content:', content);
         // console.log('file:', file);
         next();
@@ -143,16 +208,25 @@ class WebPanel {
           err
         });
       });
+
     }
   }
-
-  getServiceData(filePath: string) {
+  async getServiceData(filePath: string) {
     let data;
     let err;
     try{
       const decls = fs.readFileSync(filePath).toString();
       const jsonStructure: Module = parseStruct(decls, {}, "");
       data = jsonStructure;
+      //classes-> extends --> extended class name -->
+      // let extendedClassName = '';
+      // extendedClassName = data.classes[0].extends[0].basicName;
+      //find in service list and push them in data 
+      // let list;
+      // await this.getMethodsForExtendedClass(extendedClassName).then(
+      //   res=>{list=res;}
+      // );
+      
     } catch (e) {
       err = e;
     }
