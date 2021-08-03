@@ -184,8 +184,8 @@ class WebPanel {
     <html>
       <head></head>
       <body>
-        <button onclick="getServiceFiles()">btn</button>
-        <iframe src="http://localhost:4900" style="height: 600px; width: 100%;" id="ui-builder-iframe"></iframe>
+        <!-- <button onclick="getServiceFiles()">btn</button> -->
+        <iframe src="http://localhost:4900" style="height: 100vh; width: 100%;" id="ui-builder-iframe"></iframe>
       <script>
       const vscode = acquireVsCodeApi();
       function getServiceFiles() {
