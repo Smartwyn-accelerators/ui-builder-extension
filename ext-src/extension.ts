@@ -101,13 +101,13 @@ class WebPanel {
         const dirPath = `${fileUri[0].path}/${data.name}`
         vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
         
-        const htmlFilePath = `${dirPath}/${data.name}.html`;
+        const htmlFilePath = `${dirPath}/${data.name}.component.html`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(htmlFilePath), Buffer.from(data.htmlContent));
         
-        const scriptFilePath = `${dirPath}/${data.name}.ts`;
+        const scriptFilePath = `${dirPath}/${data.name}.component.ts`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(scriptFilePath), Buffer.from(data.scriptContent));
         
-        const cssFilePath = `${dirPath}/${data.name}.scss`;
+        const cssFilePath = `${dirPath}/${data.name}.component.scss`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(cssFilePath), Buffer.from(data.cssContent));
 
         vscode.window.showInformationMessage('component generated in ' + dirPath);
@@ -149,7 +149,10 @@ class WebPanel {
     let data;
     let err;
     try{
-      const decls = fs.readFileSync(filePath).toString();
+      // const decls = fs.readFileSync(filePath).toString().replace(/'/g, "\"");
+      const decls = fs.readFileSync(filePath)
+                      .toString()
+                      .replace("root',", "root'")
       const jsonStructure: Module = parseStruct(decls, {}, "");
       data = jsonStructure;
     } catch (e) {
