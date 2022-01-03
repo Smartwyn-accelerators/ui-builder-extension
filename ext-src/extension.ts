@@ -158,6 +158,7 @@ class WebPanel {
       canSelectFolders: true,
       canSelectFiles: false
     };
+    const testFileData: any=`import { ComponentFixture, TestBed } from '@angular/core/testing';\nimport { ${data.name}Component } from './${data.name}.component';\ndescribe('${data.name}Component', () => {\n\tlet component: ${data.name}Component;\n\tlet fixture: ComponentFixture<${data.name}Component>;\n\tbeforeEach(async () => {\n\t\tawait TestBed.configureTestingModule({\n\t\tdeclarations: [ ${data.name}Component ]\n\t})\n\t\t.compileComponents();\n\t});\n\n\tbeforeEach(() => {\n\t\tfixture = TestBed.createComponent(${data.name}Component);\n\t\tcomponent = fixture.componentInstance;\n\t\tfixture.detectChanges();\n\t});\n\n\tit('should create', () => {\n\t\texpect(component).toBeTruthy();\n\t});\n});`;
     vscode.window.showOpenDialog(options).then(fileUri => {
       if (fileUri && fileUri[0]) {
         const dirPath = `${fileUri[0].path}/${data.name}`
@@ -171,6 +172,11 @@ class WebPanel {
         
         const cssFilePath = `${dirPath}/${data.name}.component.scss`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(cssFilePath), Buffer.from(data.cssContent));
+
+        const testFilePath = `${dirPath}/${data.name}.component.spec.ts`;
+        vscode.workspace.fs.writeFile(vscode.Uri.file(testFilePath), Buffer.from(testFileData));
+        
+
         this.addServiceMethod(data.serviceVariables);
 
         vscode.window.showInformationMessage('component generated in ' + dirPath);
