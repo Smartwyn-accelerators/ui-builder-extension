@@ -131,16 +131,32 @@ class WebPanel {
         if(filedata!==''){
           let str= this.generateServiceMethod(element);
           let result;
-          if(!filedata.includes(str)){
-           result =  filedata.replace('\r\n}\r\n','\n'+str+'\r\n}\r\n');
-           if(result.indexOf(`import { catchError} from 'rxjs/operators';`)<0){
-           result = result.replace(`import { Injectable } from '@angular/core';`,`import { Injectable } from '@angular/core';
-           import { catchError} from 'rxjs/operators';`);
-           }
-           await fs.writeFile(serviceFilePath, result , 'utf8', function (err) {
-            if (err) return console.log(err);
-          });
-          }
+          const decls = fs.readFileSync(serviceFilePath)
+          .toString()
+          .replace("root',", "root'")
+          const jsonStructure: Module = parseStruct(decls, {}, "");
+          let methodsServiceFile;
+          if(jsonStructure.classes.length>0){
+            methodsServiceFile = jsonStructure.classes[0].methods;
+            if(methodsServiceFile.find(m=>m.name===element.methodName)){
+              let method = methodsServiceFile.find(m=>m.name===element.methodName);
+              let mStr = filedata.slice(method.start,method.end);
+              result = filedata.replace(mStr,str);
+            }
+            else{   
+            result = [filedata.slice(0, filedata.lastIndexOf('}')), str, filedata.slice(filedata.lastIndexOf('}'))].join('');
+            }
+            
+            }
+            if(result){
+              if(result.indexOf(`import { catchError} from 'rxjs/operators';`)<0){
+              result = result.replace(`import { Injectable } from '@angular/core';`,`import { Injectable } from '@angular/core';
+              import { catchError} from 'rxjs/operators';`);
+              }
+              await fs.writeFile(serviceFilePath, result , 'utf8', function (err) {
+               if (err) return console.log(err);
+             });
+            }
             
           }
       })
@@ -158,6 +174,7 @@ class WebPanel {
       canSelectFolders: true,
       canSelectFiles: false
     };
+    const testFileData: any=`import { ComponentFixture, TestBed } from '@angular/core/testing';\nimport { ${data.name}Component } from './${data.name}.component';\ndescribe('${data.name}Component', () => {\n\tlet component: ${data.name}Component;\n\tlet fixture: ComponentFixture<${data.name}Component>;\n\tbeforeEach(async () => {\n\t\tawait TestBed.configureTestingModule({\n\t\tdeclarations: [ ${data.name}Component ]\n\t})\n\t\t.compileComponents();\n\t});\n\n\tbeforeEach(() => {\n\t\tfixture = TestBed.createComponent(${data.name}Component);\n\t\tcomponent = fixture.componentInstance;\n\t\tfixture.detectChanges();\n\t});\n\n\tit('should create', () => {\n\t\texpect(component).toBeTruthy();\n\t});\n});`;
     vscode.window.showOpenDialog(options).then(fileUri => {
       if (fileUri && fileUri[0]) {
         const dirPath = `${fileUri[0].path}/${data.name}`
@@ -171,6 +188,11 @@ class WebPanel {
         
         const cssFilePath = `${dirPath}/${data.name}.component.scss`;
         vscode.workspace.fs.writeFile(vscode.Uri.file(cssFilePath), Buffer.from(data.cssContent));
+
+        const testFilePath = `${dirPath}/${data.name}.component.spec.ts`;
+        vscode.workspace.fs.writeFile(vscode.Uri.file(testFilePath), Buffer.from(testFileData));
+        
+
         this.addServiceMethod(data.serviceVariables);
 
         vscode.window.showInformationMessage('component generated in ' + dirPath);
